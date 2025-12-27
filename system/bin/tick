@@ -1,0 +1,121 @@
+#!/system/bin/sh
+# =================================================================
+# Tick Framework
+# "Give your modules a heart beat." —— 为你的模块注入心跳。
+# =================================================================
+
+# --- 1. 环境变量 ---
+export HOME=/data/adb/modules/Tick
+export PATH=$HOME/.local/bin:/system/bin:/vendor/bin:$PATH
+
+TICK_DIR="/data/adb/tick"
+CONFIG_PATH="$TICK_DIR/pueue.yml"
+SOCKET_PATH="$TICK_DIR/tick.socket"
+LOCK_FILE="$TICK_DIR/tick.lock"
+PUEUED_BIN="pueued"
+PUEUE_BIN="pueue"
+
+# --- 2. 简单检查
+if [ ! -d "$TICK_DIR" ]; then
+    mkdir -p "$TICK_DIR"
+    chmod 700 "$TICK_DIR"
+fi
+
+if [ ! -f "$CONFIG_PATH" ]; then
+    cat > "$CONFIG_PATH" <<EOF
+shared:
+  unix_socket_path: $SOCKET_PATH
+daemon:
+  default_parallel_tasks: 1
+  max_old_log_files: 3
+EOF
+    chmod 600 "$CONFIG_PATH"
+fi
+
+# --- 3 . 按需启动
+ensure_daemon() {
+    # 第一次检查：如果服务已连通则直接跳过
+    if ! "$PUEUE_BIN" --config "$CONFIG_PATH" status >/dev/null 2>&1; then
+        
+        # 使用文件锁防止多个模块同时调用导致启动多个进程
+        (
+            # 获取排他锁 (fd 200)，防止并发冲突
+            flock -x 200
+
+            # 第二次检查：获取锁后再次确认状态，防止竞态条件
+            if ! "$PUEUE_BIN" --config "$CONFIG_PATH" status >/dev/null 2>&1; then
+                # 清理可能存在的残留僵尸 Socket 
+                [ -S "$SOCKET_PATH" ] && rm -f "$SOCKET_PATH"
+                
+                # 启动守护进程
+                "$PUEUED_BIN" --daemonize --config "$CONFIG_PATH"
+                
+                # 循环等待直到 Socket 就绪
+                _retry=0
+                while [ $_retry -lt 15 ]; do
+                    [ -S "$SOCKET_PATH" ] && break
+                    sleep 0.2
+                    _retry=$((_retry + 1))
+                done
+                
+                # 严格限制 Socket 权限：仅 Root 可访问 (600)
+                [ -S "$SOCKET_PATH" ] && chmod 600 "$SOCKET_PATH"
+            fi
+        ) 200>"$LOCK_FILE"
+    fi
+}
+
+# --- 4. 核心函数
+register_task() {
+    _task_id="$1"    # 格式: 模块ID:任务名称
+    _recurrence="$2" # 格式: "15m", "1h", "0 3 * * *"
+    _command="$3"    # 完整执行命令
+
+    ensure_daemon
+
+    # 提取分组名实现多模块隔离 (ash 语法)
+    _group_name=$(echo "$_task_id" | cut -d: -f1)
+    
+    # 幂等性处理：根据 Label 删除旧任务防止堆积 (强制使用 label)
+    "$PUEUE_BIN" --config "$CONFIG_PATH" remove --label "$_task_id" >/dev/null 2>&1
+    
+    # 自动创建独立分组 (隔离执行槽位，每个模块独立并发控制)
+    "$PUEUE_BIN" --config "$CONFIG_PATH" add-group "$_group_name" >/dev/null 2>&1
+    
+    # 注册心跳任务
+    "$PUEUE_BIN" --config "$CONFIG_PATH" add \
+        --group "$_group_name" \
+        --label "$_task_id" \
+        --recurrence "$_recurrence" \
+        -- "$_command"
+}
+
+# --- 5. 指令分发 ---
+case "$1" in
+    reg|add)
+        [ -z "$4" ] && { echo "Usage: tick reg <ID:NAME> <TIME> <CMD>"; exit 1; }
+        register_task "$2" "$3" "$4"
+        ;;
+    unreg|rm)
+        ensure_daemon
+        "$PUEUE_BIN" --config "$CONFIG_PATH" remove --label "$2"
+        ;;
+    status|st)
+        ensure_daemon
+        "$PUEUE_BIN" --config "$CONFIG_PATH" status
+        ;;
+    log)
+        ensure_daemon
+        "$PUEUE_BIN" --config "$CONFIG_PATH" log --label "$2"
+        ;;
+    shutdown)
+        "$PUEUE_BIN" --config "$CONFIG_PATH" shutdown
+        ;;
+    *)
+        echo "Tick Framework v1.0 [Powered by Pueue & Rust]"
+        echo "=============================================="
+        echo "Usage: tick {reg|unreg|status|log|shutdown}"
+        echo "API: tick reg \"MODID:TASK\" \"TIME\" \"COMMAND\""
+        exit 1
+        ;;
+esac
