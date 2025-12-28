@@ -60,66 +60,6 @@ set_i18n "UNSUPPORTED_ARCH" \
 
 print "$(i18n "INSTALL_CHECK")"
 
-# 简单的架构检查（只允许常见移动/桌面移动CPU架构）
-case "${ARCH}" in
-    arm|arm64|x86|x64)
-        # 支持
-        ;;
-    *)
-        abort "$(i18n "UNSUPPORTED_ARCH")"
-        ;;
-esac
-
-# 检查并设置内置 pueue 二进制
-PUEUE_BIN="$MODPATH/.local/bin/pueue"
-PUEUED_BIN="$MODPATH/.local/bin/pueued"
-
-for _bin in "$PUEUE_BIN" "$PUEUED_BIN"; do
-    if [ ! -f "$_bin" ]; then
-        abort "Missing required file: $_bin"
-    fi
-
-    # 确保可执行权限并应用标准上下文/属主
-    chmod 0755 "$_bin" >/dev/null 2>&1 || true
-    set_perm "$_bin" 0 0 0755
-done
-
-# 设置 tick CLI 的权限（如果存在）
-if [ -f "$MODPATH/system/bin/tick" ]; then
-    chmod 0755 "$MODPATH/system/bin/tick" >/dev/null 2>&1 || true
-    set_perm "$MODPATH/system/bin/tick" 0 0 0755
-fi
-
-# 递归设置 .local 内部文件权限
-if [ -d "$MODPATH/.local" ]; then
-    set_perm_recursive "$MODPATH/.local" 0 0 0755 0755
-fi
-
-# 尝试初始化运行时目录（可在安装时创建以降低首次运行延迟）
-TICK_DIR="/data/adb/tick"
-CONFIG_PATH="$TICK_DIR/pueue.yml"
-
-if mkdir -p "$TICK_DIR" 2>/dev/null; then
-    chmod 700 "$TICK_DIR" >/dev/null 2>&1 || true
-
-    if [ ! -f "$CONFIG_PATH" ]; then
-        cat > "$CONFIG_PATH" <<'EOF'
-shared:
-  unix_socket_path: /data/adb/tick/tick.socket
-daemon:
-  default_parallel_tasks: 1
-  max_old_log_files: 3
-EOF
-        chmod 600 "$CONFIG_PATH" >/dev/null 2>&1 || true
-    fi
-else
-    print "Warning: cannot create $TICK_DIR (it will be created on first run)."
-fi
-
-# 快速执行一次 pueue 以提前发现可能的架构/依赖问题（非致命）
-if ! "$PUEUE_BIN" --version >/dev/null 2>&1; then
-    print "$(i18n "WARN_PUEUE_FAIL")"
-fi
 
 print "$(i18n "INSTALL_OK")"
 
