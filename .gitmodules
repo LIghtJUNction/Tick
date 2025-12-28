@@ -1,0 +1,4 @@
+[submodule "src/Tick/lib/kamfw"]
+	path = src/Tick/lib/kamfw
+	url = https://github.com/MemDeco-WG/kamfw.git
+	branch = main
