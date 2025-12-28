@@ -43,13 +43,15 @@ set_i18n "INSTALL_OK" \
     "ko" "설치 성공: 권한이 설정되고 런타임 디렉터리가 초기화되었습니다."
 
 print "$(i18n "INSTALL_CHECK")"
-
-print "$(i18n "INSTALL_OK")"
+import arch
+support_arch arm64
 
 import launcher
 launch url "https://github.com/LIghtJUNction/Tick"
 
 # import rich --> 这里有更多，比如 ask函数 confirm函数
+
+print "$(i18n "INSTALL_OK")"
 
 ##################################
 # 备忘文档 -- 可删除               #
