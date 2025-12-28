@@ -21,14 +21,10 @@ import lang
 
 # 任务一：模块使用指南
 set_i18n "USAGE_GUIDE" \
-    "zh" "使用教程：
-    ..." \
-    "en" "Usage guide:
-    ..." \
-    "ja" "使用方法：
-    ..." \
-    "ko" "사용 안내:
-    ... "
+    "zh" "使用教程：\n1. 概述：Tick 基于 pueue，按需启动守护进程（Lazy-Start）。\n2. 注册任务（推荐在模块的 service.sh 中）：\n   示例：\n   if [ -f \"/system/bin/tick\" ]; then\n       tick reg \"\${MODID}:optimize\" \"15m\" \"sh \${MODDIR}/scripts/opt.sh\"\n   fi\n3. 常用命令：\n   - tick reg \"MODID:task\" \"TIME\" \"CMD\" — 注册/更新任务\n   - tick unreg \"MODID:task\" — 注销任务\n   - tick st / tick status — 查看状态\n   - tick log \"MODID:task\" — 查看日志\n4. 时间格式：支持缩写（\"30s\", \"15m\", \"1h\", \"2d\"）和标准 Cron 表达式（\"0 3 * * *\"）。\n5. 存放位置：/data/adb/tick（目录权限 700），配置文件 pueue.yml（权限 600）。\n6. 调试：若任务未运行，检查 pueue 二进制是否与设备 ABI 匹配，及 /data/adb/tick/pueue.yml 的权限。" \
+    "en" "Usage guide:\n1. Overview: Tick is a tiny scheduling wrapper around pueue that starts the daemon lazily.\n2. Register tasks (recommended in your module's service.sh):\n   Example:\n   if [ -f \"/system/bin/tick\" ]; then\n       tick reg \"\${MODID}:optimize\" \"15m\" \"sh \${MODDIR}/scripts/opt.sh\"\n   fi\n3. Common commands:\n   - tick reg \"MODID:task\" \"TIME\" \"CMD\" — register/update a job\n   - tick unreg \"MODID:task\" — unregister a job\n   - tick st / tick status — show tasks & daemon status\n   - tick log \"MODID:task\" — view logs\n4. Time formats: supports shorthands (\"30s\", \"15m\", \"1h\", \"2d\") and standard cron (\"0 3 * * *\").\n5. Paths & perms: runtime dir is /data/adb/tick (700), pueue.yml should be 600.\n6. Troubleshooting: check that bundled pueue matches the device ABI and pueue.yml permissions." \
+    "ja" "使用方法：\n  1. 概要：Tick は pueue をラップした軽量なスケジューラです。\n  2. タスクの登録は service.sh で行うことを推奨します。" \
+    "ko" "사용 안내：\n  1. 개요: Tick 은 pueue 를 래핑한 경량 스케줄러입니다.\n  2. 작업 등록은 module 의 service.sh 에서 수행하세요."
 
 # print： ui_print plus
 print "$(i18n "USAGE_GUIDE")"
@@ -46,27 +42,12 @@ set_i18n "INSTALL_OK" \
     "ja" "インストール成功: パーミッションが設定され、ランタイムディレクトリが初期化されました。" \
     "ko" "설치 성공: 권한이 설정되고 런타임 디렉터리가 초기화되었습니다."
 
-set_i18n "WARN_PUEUE_FAIL" \
-    "zh" "警告：内置 pueue/pueued 无法在设备上执行（可能与架构不兼容）。" \
-    "en" "Warning: bundled pueue/pueued failed to execute on this device (possible architecture mismatch)." \
-    "ja" "警告: バンドルされた pueue/pueued がこのデバイスで実行できません（アーキテクチャの不一致の可能性）。" \
-    "ko" "경고: 번들된 pueue/pueued가 기기에서 실행되지 않습니다 (아키텍처 불일치 가능성)."
-
-set_i18n "UNSUPPORTED_ARCH" \
-    "zh" "不支持的架构：${ARCH}" \
-    "en" "Unsupported architecture: ${ARCH}" \
-    "ja" "サポートされていないアーキテクチャ: ${ARCH}" \
-    "ko" "지원되지 않는 아키텍처: ${ARCH}"
-
 print "$(i18n "INSTALL_CHECK")"
-
 
 print "$(i18n "INSTALL_OK")"
 
-# import launcher
-
-# launch url "https://github.com/UserName/repo"
-# launch ...
+import launcher
+launch url "https://github.com/LIghtJUNction/Tick"
 
 # import rich --> 这里有更多，比如 ask函数 confirm函数
 
