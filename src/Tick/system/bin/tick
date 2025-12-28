@@ -36,7 +36,7 @@ fi
 ensure_daemon() {
     # 第一次检查：如果服务已连通则直接跳过
     if ! "$PUEUE_BIN" --config "$CONFIG_PATH" status >/dev/null 2>&1; then
-        
+
         # 使用文件锁防止多个模块同时调用导致启动多个进程
         (
             # 获取排他锁 (fd 200)，防止并发冲突
@@ -44,12 +44,12 @@ ensure_daemon() {
 
             # 第二次检查：获取锁后再次确认状态，防止竞态条件
             if ! "$PUEUE_BIN" --config "$CONFIG_PATH" status >/dev/null 2>&1; then
-                # 清理可能存在的残留僵尸 Socket 
+                # 清理可能存在的残留僵尸 Socket
                 [ -S "$SOCKET_PATH" ] && rm -f "$SOCKET_PATH"
-                
+
                 # 启动守护进程
                 "$PUEUED_BIN" --daemonize --config "$CONFIG_PATH"
-                
+
                 # 循环等待直到 Socket 就绪
                 _retry=0
                 while [ $_retry -lt 15 ]; do
@@ -57,7 +57,7 @@ ensure_daemon() {
                     sleep 0.2
                     _retry=$((_retry + 1))
                 done
-                
+
                 # 严格限制 Socket 权限：仅 Root 可访问 (600)
                 [ -S "$SOCKET_PATH" ] && chmod 600 "$SOCKET_PATH"
             fi
@@ -75,13 +75,13 @@ register_task() {
 
     # 提取分组名实现多模块隔离 (ash 语法)
     _group_name=$(echo "$_task_id" | cut -d: -f1)
-    
+
     # 幂等性处理：根据 Label 删除旧任务防止堆积 (强制使用 label)
     "$PUEUE_BIN" --config "$CONFIG_PATH" remove --label "$_task_id" >/dev/null 2>&1
-    
+
     # 自动创建独立分组 (隔离执行槽位，每个模块独立并发控制)
     "$PUEUE_BIN" --config "$CONFIG_PATH" add-group "$_group_name" >/dev/null 2>&1
-    
+
     # 注册心跳任务
     "$PUEUE_BIN" --config "$CONFIG_PATH" add \
         --group "$_group_name" \

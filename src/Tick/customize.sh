@@ -14,13 +14,7 @@
 # 详见 lib/kamfw/magisk.sh
 # lib/kamfw/ksu.sh
 # lib/kamfw/ap.sh
-# 依赖控制,文件共享
-# 自动提取模块.local到kam共享目录，采用硬链接方式
-# 为保证模块卸载时候不会有残留文件，uninstall.sh文件不要删
 import __customize__
-# --> .local/bin ~~> /data/adb/kam/bin
-# --> .local/lib ~~> /data/adb/kam/lib
-
 # i18n
 import i18n
 import lang
@@ -38,6 +32,96 @@ set_i18n "USAGE_GUIDE" \
 
 # print： ui_print plus
 print "$(i18n "USAGE_GUIDE")"
+
+# 安装检查与权限设置（将尽量在安装阶段做最小可行性检查并设置权限）
+set_i18n "INSTALL_CHECK" \
+    "zh" "正在安装：检查设备兼容性与内置二进制..." \
+    "en" "Installing: checking device compatibility and bundled binaries..." \
+    "ja" "インストール: デバイスの互換性とバイナリを確認しています..." \
+    "ko" "설치 중: 기기 호환성 및 번들 바이너리 확인 중..."
+
+set_i18n "INSTALL_OK" \
+    "zh" "安装成功：权限设置完毕，运行目录已初始化。" \
+    "en" "Install successful: permissions set and runtime directory initialized." \
+    "ja" "インストール成功: パーミッションが設定され、ランタイムディレクトリが初期化されました。" \
+    "ko" "설치 성공: 권한이 설정되고 런타임 디렉터리가 초기화되었습니다."
+
+set_i18n "WARN_PUEUE_FAIL" \
+    "zh" "警告：内置 pueue/pueued 无法在设备上执行（可能与架构不兼容）。" \
+    "en" "Warning: bundled pueue/pueued failed to execute on this device (possible architecture mismatch)." \
+    "ja" "警告: バンドルされた pueue/pueued がこのデバイスで実行できません（アーキテクチャの不一致の可能性）。" \
+    "ko" "경고: 번들된 pueue/pueued가 기기에서 실행되지 않습니다 (아키텍처 불일치 가능성)."
+
+set_i18n "UNSUPPORTED_ARCH" \
+    "zh" "不支持的架构：${ARCH}" \
+    "en" "Unsupported architecture: ${ARCH}" \
+    "ja" "サポートされていないアーキテクチャ: ${ARCH}" \
+    "ko" "지원되지 않는 아키텍처: ${ARCH}"
+
+print "$(i18n "INSTALL_CHECK")"
+
+# 简单的架构检查（只允许常见移动/桌面移动CPU架构）
+case "${ARCH}" in
+    arm|arm64|x86|x64)
+        # 支持
+        ;;
+    *)
+        abort "$(i18n "UNSUPPORTED_ARCH")"
+        ;;
+esac
+
+# 检查并设置内置 pueue 二进制
+PUEUE_BIN="$MODPATH/.local/bin/pueue"
+PUEUED_BIN="$MODPATH/.local/bin/pueued"
+
+for _bin in "$PUEUE_BIN" "$PUEUED_BIN"; do
+    if [ ! -f "$_bin" ]; then
+        abort "Missing required file: $_bin"
+    fi
+
+    # 确保可执行权限并应用标准上下文/属主
+    chmod 0755 "$_bin" >/dev/null 2>&1 || true
+    set_perm "$_bin" 0 0 0755
+done
+
+# 设置 tick CLI 的权限（如果存在）
+if [ -f "$MODPATH/system/bin/tick" ]; then
+    chmod 0755 "$MODPATH/system/bin/tick" >/dev/null 2>&1 || true
+    set_perm "$MODPATH/system/bin/tick" 0 0 0755
+fi
+
+# 递归设置 .local 内部文件权限
+if [ -d "$MODPATH/.local" ]; then
+    set_perm_recursive "$MODPATH/.local" 0 0 0755 0755
+fi
+
+# 尝试初始化运行时目录（可在安装时创建以降低首次运行延迟）
+TICK_DIR="/data/adb/tick"
+CONFIG_PATH="$TICK_DIR/pueue.yml"
+
+if mkdir -p "$TICK_DIR" 2>/dev/null; then
+    chmod 700 "$TICK_DIR" >/dev/null 2>&1 || true
+
+    if [ ! -f "$CONFIG_PATH" ]; then
+        cat > "$CONFIG_PATH" <<'EOF'
+shared:
+  unix_socket_path: /data/adb/tick/tick.socket
+daemon:
+  default_parallel_tasks: 1
+  max_old_log_files: 3
+EOF
+        chmod 600 "$CONFIG_PATH" >/dev/null 2>&1 || true
+    fi
+else
+    print "Warning: cannot create $TICK_DIR (it will be created on first run)."
+fi
+
+# 快速执行一次 pueue 以提前发现可能的架构/依赖问题（非致命）
+if ! "$PUEUE_BIN" --version >/dev/null 2>&1; then
+    print "$(i18n "WARN_PUEUE_FAIL")"
+fi
+
+print "$(i18n "INSTALL_OK")"
 
 # import launcher
 
